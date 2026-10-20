@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>翻面卡 · 原型（3 张）</title>
+
+<style>
+/* ══════════════════════════════════════════════════════════════
+   这是一个「最小可运行」的翻面卡原型。
+   目的：只验证一件事——3D 翻面在手机和电脑上都能不能翻得动。
+   所以配色走技术站的冷灰，不要纸、不要印、不要楷体。
+
+   整份代码只有 5 个「非它不可」的地方，下面每处都标了序号 ①–⑤。
+   看懂这 5 处，这个分区你就完全掌握，答辩也讲这 5 处。
+   ══════════════════════════════════════════════════════════════ */
+
+:root{
+  --ink:#14181F;        /* 正文黑 */
+  --ink-soft:#4A5361;   /* 次要文字 */
+  --ink-mute:#8B94A3;   /* 提示文字 */
+  --bg:#F4F6F9;         /* 页面底色：冷灰，和"纸"刻意拉开距离 */
+  --card:#FFFFFF;
+  --line:#E2E6EC;
+  --code:#0F172A;       /* 代码块底色 */
+  --accent:#2563EB;     /* 唯一的高亮色，只用在标签上 */
+}
+
+*{ box-sizing:border-box; }
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  /* 系统字体栈：不联网、不下载字体，打开就是最快的速度 */
+  font-family:system-ui,-apple-system,"Segoe UI","Noto Sans SC",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ── 页头 ─────────────────────────────────────────────────── */
+.head{
+  max-width:1000px;
+  margin:0 auto;
+  padding:48px 24px 28px;
+}
+.head h1{
+  margin:0 0 10px;
+  font-size:28px;
+  letter-spacing:-.01em;
+}
+.head p{
+  margin:0;
+  font-size:14px;
+  line-height:1.7;
+  color:var(--ink-soft);
+  max-width:640px;
+}
+.head code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12.5px;
+  background:#E8EBF1;
+  padding:2px 6px;
+  border-radius:5px;
+}
+
+/* ── 卡片阵列 ─────────────────────────────────────────────── */
+.deck{
+  max-width:1000px;
+  margin:0 auto;
+  padding:0 24px 64px;
+  display:grid;
+  gap:20px;
+  /* 三个等宽列。minmax(0,1fr) 里的 0 很重要：
+     不写的话，长代码会把列撑宽，整个网格跟着炸掉。 */
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+@media (max-width:820px){
+  /* 窄屏一列。手机上并排三张卡，上面的字会小到没法读。 */
+  .deck{ grid-template-columns:1fr; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ① 卡片本体 = 一个 3D 舞台
+   ══════════════════════════════════════════════════════════════ */
+.card{
+  position:relative;
+  height:250px;          /* ② 必须是显式高度，理由见下面 ② */
+  border:0;
+  padding:0;
+  background:none;
+  cursor:pointer;
+  text-align:left;
+  font:inherit;
+  color:inherit;
+  /* ① perspective = 相机的距离。没有它，rotateY 看起来像"横向压扁"，
+        而不是"转过去"。整张卡片的纵深全靠这一个值。 */
+  perspective:1100px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ③ 内层 = 真正旋转的那个盒子
+   ══════════════════════════════════════════════════════════════ */
+.card-inner{
+  position:relative;
+  display:block;
+  width:100%;
+  height:100%;
+  /* ③ preserve-3d：让两个面留在 3D 空间里。
+        默认子元素会被"拍平"到父平面上，一拍平，
+        两个面就永远重叠、翻面彻底失效。这一行是翻面的开关。 */
+  transform-style:preserve-3d;
+  transition:transform .62s cubic-bezier(.22,.75,.3,1);
+}
+
+/* 翻转状态：整个内层转半圈。
+   JS 只负责加/删这一个 class，长什么样全归 CSS 管。 */
+.card.is-flipped .card-inner{
+  transform:rotateY(180deg);
+}
+
+/* 键盘可达性：Tab 到卡片时给一个看得见的框 */
+.card:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:3px;
+  border-radius:18px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ④ 两个面：正面朝你，背面预先转半圈
+   ══════════════════════════════════════════════════════════════ */
+.face{
+  position:absolute;
+  inset:0;               /* ② 两个面都绝对定位 → 不会撑高父元素 */
+  display:flex;
+  flex-direction:column;
+  padding:22px 24px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:var(--card);
+  box-shadow:0 1px 2px rgba(16,24,40,.05), 0 8px 24px -14px rgba(16,24,40,.22);
+  /* ④ backface-visibility:hidden：面转到背对时直接隐藏。
+        不写的话，卡片翻过去你会看到"镜像的字"，非常廉价。 */
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;   /* Safari 要带前缀 */
+}
+
+.back{
+  /* ④ 背面先自己转 180°。这样当父层转到 180° 时，
+        背面刚好是 360° = 正对你。两道半圈相加，才是"翻过来"。 */
+  transform:rotateY(180deg);
+  /* 背面用深色，翻过去的那一下对比最强，观众"眼前一亮"就靠它 */
+  background:var(--code);
+  border-color:#1E293B;
+  color:#E2E8F0;
+}
+
+/* ── 正面内容 ─────────────────────────────────────────────── */
+.no{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px;
+  color:var(--ink-mute);
+  letter-spacing:.08em;
+}
+.tag{
+  align-self:flex-start;
+  margin-top:10px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:11.5px;
+  color:var(--accent);
+  background:#EAF0FE;
+  padding:3px 8px;
+  border-radius:6px;
+}
+.q{
+  margin-top:16px;
+  font-size:16.5px;
+  line-height:1.55;
+  letter-spacing:-.005em;
+}
+.hint{
+  margin-top:auto;       /* 顶到底部：把留白留在中间，而不是挤成一团 */
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  color:var(--ink-mute);
+}
+
+/* ── 背面内容 ─────────────────────────────────────────────── */
+.back pre{
+  margin:14px 0 0;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px;
+  line-height:1.75;
+  color:#E2E8F0;
+  white-space:pre;
+  overflow-x:auto;       /* 代码比卡片宽时横向滚，不要换行破坏对齐 */
+}
+.back .say{
+  margin-top:auto;
+  font-size:12.5px;
+  line-height:1.65;
+  color:#94A3B8;
+}
+.back .say b{ color:#F8FAFC; }
+
+/* ══════════════════════════════════════════════════════════════
+   ⑤ 尊重系统设置：用户开了「减少动态效果」就别硬转
+   ══════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion:reduce){
+  /* ⑤ 只是关掉过渡，翻面本身照样能用——功能不能因为有障碍设置就消失 */
+  .card-inner{ transition:none; }
+}
+</style>
+</head>
+
+<body>
+
+<header class="head">
+  <h1>翻面卡 · 原型</h1>
+  <p>
+    点卡片翻面（也可以 <code>Tab</code> 选中再按 <code>Enter</code>）。
+    只有 3 张，数据写死在 HTML 里——这一步只验证翻面效果和代码量，
+    接真数据之前先把"翻"这件事做对。
+  </p>
+</header>
+
+<main class="deck">
+
+  <!-- ══════ 卡片 1 ══════
+       class="card" 是舞台，.card-inner 是转轴，两个 .face 是正反面。
+       结构必须这样：card > card-inner > (front + back)，
+       少一层、多一层，3D 都会失效。 -->
+  <button class="card" type="button" aria-pressed="false">
+    <span class="card-inner">
+      <span class="face front">
+        <span class="no">01</span>
+        <span class="tag">range</span>
+        <span class="q">循环跑 100 次，<br>i 第一次是几？</span>
+        <span class="hint">点一下看答案 →</span>
+      </span>
+      <span class="face back">
+<pre>for i in range(100):
+    print(i)
+
+# 第一行打印 0
+# 最后一行打印 99</pre>
+        <span class="say">range(n) 生成 <b>0 到 n-1</b>，一共 n 个。</span>
+      </span>
+    </span>
+  </button>
+
+  <!-- ══════ 卡片 2 ══════ -->
+  <button class="card" type="button" aria-pressed="false">
+    <span class="card-inner">
+      <span class="face front">
+        <span class="no">02</span>
+        <span class="tag">IndentationError</span>
+        <span class="q">报这个错，<br>是代码错了还是排版错了？</span>
+        <span class="hint">点一下看答案 →</span>
+      </span>
+      <span class="face back">
+<pre>for i in range(3):
+print(i)          # ❌ 报错
+
+for i in range(3):
+    print(i)      # ✅ 正常</pre>
+        <span class="say">缩进在 Python 里是<b>语法</b>，不是排版。</span>
+      </span>
+    </span>
+  </button>
+
+  <!-- ══════ 卡片 3 ══════ -->
+  <button class="card" type="button" aria-pressed="false">
+    <span class="card-inner">
+      <span class="face front">
+        <span class="no">03</span>
+        <span class="tag">len</span>
+        <span class="q">取最后一个元素，<br>为什么总是差一？</span>
+        <span class="hint">点一下看答案 →</span>
+      </span>
+      <span class="face back">
+<pre>nums = [10, 20, 30]
+
+nums[len(nums)]     # ❌ IndexError
+nums[len(nums)-1]   # ✅ 30</pre>
+        <span class="say">下标从 0 数，长度从 1 数，所以最大下标是 <b>len-1</b>。</span>
+      </span>
+    </span>
+  </button>
+
+</main>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   全部 JS 就这 8 行。
+
+   为什么这么少：用 <button> 当卡片本体，浏览器已经把
+   「Tab 聚焦 + Enter/Space 触发 click + 读屏器播报」全做好了，
+   不需要自己监听 keydown，也不需要 role="button"。
+
+   状态只有一个：卡片上有没有 .is-flipped 这个 class。
+   CSS 决定"翻过去长什么样"，JS 只决定"翻没翻"。
+   这两件事分开，是这段代码能只有 8 行的原因。
+   ══════════════════════════════════════════════════════════════ */
+
+document.querySelectorAll(".card").forEach(function (card) {
+  card.addEventListener("click", function () {
+    // toggle 返回"现在是不是翻开的"，同时把 class 加上/去掉
+    var flipped = card.classList.toggle("is-flipped");
+
+    // aria-pressed 让读屏器知道这张卡是开还是关
+    card.setAttribute("aria-pressed", flipped ? "true" : "false");
+  });
+});
+</script>
+
+</body>
+</html>
